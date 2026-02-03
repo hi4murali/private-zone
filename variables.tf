@@ -39,3 +39,9 @@ variable "project_name" {
   type        = string
   default     = "r53-private-zone-test"
 }
+
+variable "web_server_port" {
+  description = "Port the web server listens on"
+  type        = number
+  default     = 80
+}

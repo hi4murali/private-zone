@@ -251,6 +251,15 @@ resource "aws_vpc_security_group_egress_rule" "target_dns_tcp_out" {
   cidr_ipv4         = var.vpc_cidr
 }
 
+resource "aws_vpc_security_group_ingress_rule" "target_http_in" {
+  security_group_id = aws_security_group.target.id
+  description       = "HTTP inbound from VPC for web server"
+  ip_protocol       = "tcp"
+  from_port         = var.web_server_port
+  to_port           = var.web_server_port
+  cidr_ipv4         = var.vpc_cidr
+}
+
 # --- VPC Endpoints for SSM ---
 
 resource "aws_vpc_endpoint" "ssm" {
@@ -303,6 +312,12 @@ resource "aws_instance" "target" {
   subnet_id              = aws_subnet.private.id
   vpc_security_group_ids = [aws_security_group.target.id]
   iam_instance_profile   = aws_iam_instance_profile.ssm.name
+
+  user_data = templatefile("${path.module}/templates/user_data.sh.tpl", {
+    project_name = var.project_name
+    hostname     = "server.${var.private_zone_name}"
+    zone_name    = var.private_zone_name
+  })
 
   tags = {
     Name    = "${var.project_name}-target"

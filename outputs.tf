@@ -27,3 +27,13 @@ output "dns_test_command" {
   description = "Command to test private DNS resolution (run inside the SSM session)"
   value       = "dig server.${var.private_zone_name}"
 }
+
+output "ssm_port_forward" {
+  description = "AWS CLI command to forward the web server port to localhost:8080"
+  value       = "aws ssm start-session --target ${aws_instance.target.id} --document-name AWS-StartPortForwardingSession --parameters '{\"portNumber\":[\"${var.web_server_port}\"],\"localPortNumber\":[\"8080\"]}'"
+}
+
+output "web_url_local" {
+  description = "URL to access the web server after starting the SSM port forward"
+  value       = "http://localhost:8080"
+}
