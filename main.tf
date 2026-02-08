@@ -260,6 +260,89 @@ resource "aws_vpc_security_group_ingress_rule" "target_http_in" {
   cidr_ipv4         = var.vpc_cidr
 }
 
+resource "aws_vpc_security_group_ingress_rule" "target_https_in" {
+  security_group_id = aws_security_group.target.id
+  description       = "HTTPS inbound from VPC for web server"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = var.vpc_cidr
+}
+
+resource "aws_security_group" "public" {
+  name        = "${var.project_name}-public-sg"
+  description = "Security group for the public instance"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name    = "${var.project_name}-public-sg"
+    Project = var.project_name
+  }
+}
+
+resource "aws_vpc_security_group_egress_rule" "public_https_out" {
+  security_group_id = aws_security_group.public.id
+  description       = "HTTPS outbound for SSM and updates"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "public_http_out" {
+  security_group_id = aws_security_group.public.id
+  description       = "HTTP outbound for updates"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "public_dns_udp_out" {
+  security_group_id = aws_security_group.public.id
+  description       = "DNS UDP outbound"
+  ip_protocol       = "udp"
+  from_port         = 53
+  to_port           = 53
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_egress_rule" "public_dns_tcp_out" {
+  security_group_id = aws_security_group.public.id
+  description       = "DNS TCP outbound"
+  ip_protocol       = "tcp"
+  from_port         = 53
+  to_port           = 53
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "public_ssh_in" {
+  security_group_id = aws_security_group.public.id
+  description       = "SSH inbound from anywhere"
+  ip_protocol       = "tcp"
+  from_port         = 22
+  to_port           = 22
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "public_https_in" {
+  security_group_id = aws_security_group.public.id
+  description       = "HTTPS inbound from anywhere"
+  ip_protocol       = "tcp"
+  from_port         = 443
+  to_port           = 443
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "public_http_in" {
+  security_group_id = aws_security_group.public.id
+  description       = "HTTP inbound from anywhere"
+  ip_protocol       = "tcp"
+  from_port         = 80
+  to_port           = 80
+  cidr_ipv4         = "0.0.0.0/0"
+}
+
 # --- VPC Endpoints for SSM ---
 
 resource "aws_vpc_endpoint" "ssm" {
@@ -319,6 +402,8 @@ resource "aws_instance" "target" {
     zone_name    = var.private_zone_name
   })
 
+  user_data_replace_on_change = true
+
   tags = {
     Name    = "${var.project_name}-target"
     Project = var.project_name
@@ -331,6 +416,28 @@ resource "aws_instance" "target" {
     aws_vpc_endpoint.ssmmessages,
     aws_vpc_endpoint.ec2messages,
   ]
+}
+
+resource "aws_instance" "public" {
+  ami                    = data.aws_ami.amazon_linux_2023.id
+  instance_type          = var.instance_type
+  subnet_id              = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.public.id]
+  iam_instance_profile   = aws_iam_instance_profile.ssm.name
+  key_name               = var.ssh_key_name
+
+  user_data = templatefile("${path.module}/templates/user_data.sh.tpl", {
+    project_name = var.project_name
+    hostname     = "public-instance"
+    zone_name    = var.private_zone_name # Not strictly used by public instance but template expects it
+  })
+
+  user_data_replace_on_change = true
+
+  tags = {
+    Name    = "${var.project_name}-public-instance"
+    Project = var.project_name
+  }
 }
 
 # --- Route 53 Private Hosted Zone ---
@@ -354,4 +461,12 @@ resource "aws_route53_record" "server" {
   type    = "A"
   ttl     = 300
   records = [aws_instance.target.private_ip]
+}
+
+resource "aws_route53_record" "public" {
+  zone_id = aws_route53_zone.private.zone_id
+  name    = "public.${var.private_zone_name}"
+  type    = "A"
+  ttl     = 300
+  records = [aws_instance.public.private_ip]
 }

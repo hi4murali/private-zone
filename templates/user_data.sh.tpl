@@ -7,8 +7,19 @@ TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
 PRIVATE_IP=$(curl -s "http://169.254.169.254/latest/meta-data/local-ipv4" \
   -H "X-aws-ec2-metadata-token: $TOKEN")
 
-# Install web server
-dnf install -y httpd
+# Install web server and SSL module
+dnf install -y httpd mod_ssl openssl
+
+# Create a self-signed certificate for testing
+mkdir -p /etc/pki/tls/certs
+mkdir -p /etc/pki/tls/private
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/pki/tls/private/apache-selfsigned.key \
+  -out /etc/pki/tls/certs/apache-selfsigned.crt \
+  -subj "/C=US/ST=State/L=City/O=Organization/OU=Unit/CN=localhost"
+
+# Force SSL configuration to listen on 443 (mod_ssl usually does this but let's be explicit if needed)
+# The default ssl.conf in Amazon Linux 2023 usually handles this.
 
 # Write landing page
 cat > /var/www/html/index.html <<HTML
@@ -28,14 +39,12 @@ cat > /var/www/html/index.html <<HTML
 </head>
 <body>
   <h1>${project_name}</h1>
-  <p>This page is served from a private EC2 instance via SSM port forwarding.</p>
+  <p>This page is served from an EC2 instance.</p>
   <dl class="info">
     <dt>Hostname</dt>
     <dd>${hostname}</dd>
     <dt>Private IP</dt>
     <dd>$${PRIVATE_IP}</dd>
-    <dt>Private DNS Zone</dt>
-    <dd>${zone_name}</dd>
   </dl>
 </body>
 </html>

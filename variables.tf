@@ -31,7 +31,13 @@ variable "private_zone_name" {
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.medium"
+}
+
+variable "public_instance_type" {
+  description = "EC2 instance type"
+  type        = string
+  default     = "t3.large"
 }
 
 variable "project_name" {
@@ -44,4 +50,10 @@ variable "web_server_port" {
   description = "Port the web server listens on"
   type        = number
   default     = 80
+}
+
+variable "ssh_key_name" {
+  description = "Name of the SSH key pair to use for the public instance"
+  type        = string
+  default     = null
 }
